@@ -1,7 +1,9 @@
 use super::{
-    BulkString, RespArray, RespEncode, RespFrame, RespNull, RespNullArray, RespNullBulkString,
-    SimpleError, SimpleString,
+    BulkString, RespArray, RespEncode, RespFrame, RespMap, RespNull, RespNullArray,
+    RespNullBulkString, RespSet, SimpleError, SimpleString,
 };
+
+const BUF_CAP: usize = 4096;
 
 impl RespEncode for RespFrame {
     fn encode(self) -> Vec<u8> {
@@ -14,11 +16,11 @@ impl RespEncode for RespFrame {
             RespFrame::Array(a) => a.encode(),
             RespFrame::Null(n) => n.encode(),
             RespFrame::NullArray(n) => n.encode(),
-            // RespFrame::Boolean(b) => b.encode(),
-            // RespFrame::Double(d) => d.encode(),
+            RespFrame::Boolean(b) => b.encode(),
+            RespFrame::Double(d) => d.encode(),
             // RespFrame::BigNumber(b) => b.encode(),
-            // RespFrame::Map(m) => m.encode(),
-            // RespFrame::Set(s) => s.encode(),
+            RespFrame::Map(m) => m.encode(),
+            RespFrame::Set(s) => s.encode(),
             _ => unimplemented!("Not implemented yet"),
         }
     }
@@ -60,11 +62,10 @@ impl RespEncode for RespNullBulkString {
     }
 }
 
-const ARRAY_CAP: usize = 4096;
 // RespArray
 impl RespEncode for RespArray {
     fn encode(self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(ARRAY_CAP);
+        let mut buf = Vec::with_capacity(BUF_CAP);
         buf.extend_from_slice(&format!("*{}\r\n", self.len()).into_bytes());
         for frame in self.0 {
             buf.extend_from_slice(&frame.encode());
@@ -101,6 +102,39 @@ impl RespEncode for bool {
 // f64
 impl RespEncode for f64 {
     fn encode(self) -> Vec<u8> {
-        format!("$,{:+e}\r\n", self).into_bytes()
+        let mut buf = Vec::with_capacity(32);
+        let ret = if self.abs() > 1e+8 {
+            format!("$,{:+e}\r\n", self)
+        } else {
+            let sign = if self < 0.0 { "" } else { "+" };
+            format!(",{}{}\r\n", sign, self)
+        };
+        buf.extend_from_slice(&ret.into_bytes());
+        buf
+    }
+}
+
+// HashMap
+impl RespEncode for RespMap {
+    fn encode(self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(BUF_CAP);
+        buf.extend_from_slice(&format!("*{}\r\n", self.len()).into_bytes());
+        for (k, v) in self.0 {
+            buf.extend_from_slice(&SimpleString::new(k).encode());
+            buf.extend_from_slice(&v.encode());
+        }
+        buf
+    }
+}
+
+// HashSet
+impl RespEncode for RespSet {
+    fn encode(self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(BUF_CAP);
+        buf.extend_from_slice(&format!("~{}\r\n", self.len()).into_bytes());
+        for frame in self.0 {
+            buf.extend_from_slice(&frame.encode());
+        }
+        buf
     }
 }

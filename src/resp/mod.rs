@@ -26,14 +26,16 @@ pub enum RespFrame {
     Boolean(bool),
     Double(f64),
     BigNumber(Vec<u8>),
-    Map(HashMap<String, RespFrame>),
-    Set(HashSet<RespFrame>),
+    Map(RespMap),
+    Set(RespSet),
 }
 
 pub struct SimpleString(String);
 pub struct SimpleError(String);
 pub struct BulkString(Vec<u8>);
 pub struct RespArray(Vec<RespFrame>);
+pub struct RespMap(HashMap<String, RespFrame>);
+pub struct RespSet(HashSet<RespFrame>);
 pub struct RespNull;
 pub struct RespNullArray;
 pub struct RespNullBulkString;
@@ -68,5 +70,27 @@ impl Deref for RespArray {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Deref for RespMap {
+    type Target = HashMap<String, RespFrame>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Deref for RespSet {
+    type Target = HashSet<RespFrame>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl SimpleString {
+    pub fn new(s: impl Into<String>) -> Self {
+        SimpleString(s.into())
     }
 }
