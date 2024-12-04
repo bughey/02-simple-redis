@@ -1,11 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
 };
+
+use enum_dispatch::enum_dispatch;
 
 pub mod decode;
 pub mod encode;
 
+#[enum_dispatch]
 pub trait RespEncode {
     fn encode(self) -> Vec<u8>;
 }
@@ -14,6 +17,8 @@ pub trait RespDecode {
     fn decode(buf: Self) -> Result<RespFrame, String>;
 }
 
+#[derive(Debug, PartialEq)]
+#[enum_dispatch(RespEncode)]
 pub enum RespFrame {
     SimpleString(SimpleString),
     Error(SimpleError),
@@ -25,19 +30,35 @@ pub enum RespFrame {
     NullArray(RespNullArray),
     Boolean(bool),
     Double(f64),
-    BigNumber(Vec<u8>),
     Map(RespMap),
     Set(RespSet),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct SimpleString(String);
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct SimpleError(String);
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct BulkString(Vec<u8>);
+
+#[derive(Debug, PartialEq)]
 pub struct RespArray(Vec<RespFrame>);
-pub struct RespMap(HashMap<String, RespFrame>);
-pub struct RespSet(HashSet<RespFrame>);
+
+#[derive(Debug, PartialEq)]
+pub struct RespMap(BTreeMap<String, RespFrame>);
+
+#[derive(Debug, PartialEq)]
+pub struct RespSet(Vec<RespFrame>);
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct RespNull;
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct RespNullArray;
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct RespNullBulkString;
 
 // impl Deref for SimpleString, SimpleError, BulkString
@@ -74,15 +95,27 @@ impl Deref for RespArray {
 }
 
 impl Deref for RespMap {
-    type Target = HashMap<String, RespFrame>;
+    type Target = BTreeMap<String, RespFrame>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
+impl DerefMut for RespMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Default for RespMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Deref for RespSet {
-    type Target = HashSet<RespFrame>;
+    type Target = Vec<RespFrame>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -92,5 +125,35 @@ impl Deref for RespSet {
 impl SimpleString {
     pub fn new(s: impl Into<String>) -> Self {
         SimpleString(s.into())
+    }
+}
+
+impl SimpleError {
+    pub fn new(s: impl Into<String>) -> Self {
+        SimpleError(s.into())
+    }
+}
+
+impl BulkString {
+    pub fn new(s: impl Into<Vec<u8>>) -> Self {
+        BulkString(s.into())
+    }
+}
+
+impl RespArray {
+    pub fn new(s: impl Into<Vec<RespFrame>>) -> Self {
+        RespArray(s.into())
+    }
+}
+
+impl RespMap {
+    pub fn new() -> Self {
+        RespMap(BTreeMap::new())
+    }
+}
+
+impl RespSet {
+    pub fn new(s: impl Into<Vec<RespFrame>>) -> Self {
+        RespSet(s.into())
     }
 }
