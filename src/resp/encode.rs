@@ -1,9 +1,7 @@
 use super::{
     BulkString, RespArray, RespEncode, RespMap, RespNull, RespNullArray, RespNullBulkString,
-    RespSet, SimpleError, SimpleString,
+    RespSet, SimpleError, SimpleString, BUF_CAP,
 };
-
-const BUF_CAP: usize = 4096;
 
 impl RespEncode for i64 {
     fn encode(self) -> Vec<u8> {

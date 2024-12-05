@@ -3,18 +3,94 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use bytes::{Buf, BytesMut};
 use enum_dispatch::enum_dispatch;
+use thiserror::Error;
 
 pub mod decode;
 pub mod encode;
+
+const BUF_CAP: usize = 4096;
+const CRLF: &[u8] = b"\r\n";
+const CRLF_LEN: usize = CRLF.len();
 
 #[enum_dispatch]
 pub trait RespEncode {
     fn encode(self) -> Vec<u8>;
 }
 
-pub trait RespDecode {
-    fn decode(buf: Self) -> Result<RespFrame, String>;
+pub trait RespDecode: Sized {
+    const PREFIX: &'static str;
+    fn decode(buf: &mut BytesMut) -> Result<Self, RespError>;
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum RespError {
+    #[error("Invalid frame: {0}")]
+    InvalidFrame(String),
+    #[error("Invalid frame type: {0}")]
+    InvalidFrameType(String),
+    #[error("Invalid frame length: {0}")]
+    InvalidFrameLength(isize),
+    #[error("Frame is not complete")]
+    NotComplete,
+    #[error("Parse error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+    // #[error("Utf8 error: {0}")]
+    // Utf8Error(#[from] std::string::FromUtf8Error),
+    // #[error("Parse float error: {0}")]
+    // ParseFloatError(#[from] std::num::ParseFloatError),
+}
+
+// utility functions
+fn extract_fixed_data(
+    buf: &mut BytesMut,
+    expect: &str,
+    expect_type: &str,
+) -> Result<(), RespError> {
+    if buf.len() < expect.len() {
+        return Err(RespError::NotComplete);
+    }
+
+    if !buf.starts_with(expect.as_bytes()) {
+        return Err(RespError::InvalidFrameType(format!(
+            "expect: {}, got: {:?}",
+            expect_type, buf
+        )));
+    }
+
+    buf.advance(expect.len());
+    Ok(())
+}
+
+fn extract_simple_frame_data(buf: &[u8], prefix: &str) -> Result<usize, RespError> {
+    if buf.len() < 3 {
+        return Err(RespError::NotComplete);
+    }
+
+    if !buf.starts_with(prefix.as_bytes()) {
+        return Err(RespError::InvalidFrameType(format!(
+            "expect: SimpleString({}), got: {:?}",
+            prefix, buf
+        )));
+    }
+
+    find_crlf(buf, 1).ok_or(RespError::NotComplete)
+}
+
+// find nth CRLF in the buffer
+fn find_crlf(buf: &[u8], nth: usize) -> Option<usize> {
+    let mut count = 0;
+    for i in 1..buf.len() - 1 {
+        if buf[i] == b'\r' && buf[i + 1] == b'\n' {
+            count += 1;
+            if count == nth {
+                return Some(i);
+            }
+        }
+    }
+
+    None
 }
 
 #[derive(Debug, PartialEq)]
