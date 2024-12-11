@@ -93,6 +93,12 @@ fn find_crlf(buf: &[u8], nth: usize) -> Option<usize> {
     None
 }
 
+fn parse_length(buf: &[u8], prefix: &str) -> Result<(usize, usize), RespError> {
+    let end = extract_simple_frame_data(buf, prefix)?;
+    let s = String::from_utf8_lossy(&buf[prefix.len()..end]);
+    Ok((end, s.parse()?))
+}
+
 #[derive(Debug, PartialEq)]
 #[enum_dispatch(RespEncode)]
 pub enum RespFrame {

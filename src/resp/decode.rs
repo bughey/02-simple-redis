@@ -1,8 +1,10 @@
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 
-use crate::resp::{extract_simple_frame_data, CRLF_LEN};
+use crate::resp::{extract_simple_frame_data, parse_length, CRLF_LEN};
 
-use super::{extract_fixed_data, RespDecode, RespError, RespFrame, SimpleError, SimpleString};
+use super::{
+    extract_fixed_data, BulkString, RespDecode, RespError, RespFrame, SimpleError, SimpleString,
+};
 
 impl RespDecode for RespFrame {
     const PREFIX: &'static str = "";
@@ -60,6 +62,22 @@ impl RespDecode for i64 {
     }
 }
 
+impl RespDecode for BulkString {
+    const PREFIX: &'static str = "$";
+    fn decode(buf: &mut BytesMut) -> Result<Self, RespError> {
+        let (end, len) = parse_length(buf, Self::PREFIX)?;
+        let remained = &buf[end + CRLF_LEN..];
+        if remained.len() < len + CRLF_LEN {
+            return Err(RespError::NotComplete);
+        }
+
+        buf.advance(end + CRLF_LEN);
+
+        let data = buf.split_to(len + CRLF_LEN);
+        Ok(BulkString::new(data[..len].to_vec()))
+    }
+}
+
 impl RespDecode for bool {
     const PREFIX: &'static str = "#";
     fn decode(buf: &mut BytesMut) -> Result<Self, RespError> {
@@ -77,9 +95,25 @@ impl RespDecode for bool {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use bytes::{BufMut, BytesMut};
+    use bytes::{Buf, BufMut, BytesMut};
 
-    use crate::resp::{RespDecode, RespError, SimpleError, SimpleString};
+    use crate::resp::{BulkString, RespDecode, RespError, SimpleError, SimpleString};
+
+    #[test]
+    fn test_capacity() {
+        let mut b = BytesMut::from(&b"hello"[..]);
+        assert_eq!(b.capacity(), 5);
+        assert_eq!(b.len(), 5);
+        b.advance(2);
+        assert_eq!(b.capacity(), 3);
+        assert_eq!(b.len(), 3);
+        b.advance(3);
+        assert_eq!(b.capacity(), 0);
+        assert_eq!(b.len(), 0);
+        b.extend_from_slice(b"abc");
+        assert_eq!(b.capacity(), 5); // ! 数据指针不变，沿用原capacity
+        assert_eq!(b.len(), 3);
+    }
 
     #[test]
     fn test_simple_string_decode() -> Result<()> {
@@ -108,6 +142,25 @@ mod tests {
 
         let frame = SimpleError::decode(&mut buf)?;
         assert_eq!(frame, SimpleError::new("ERR".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bulk_string_decode() -> Result<()> {
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(b"$5\r\nhello\r\n");
+
+        let frame = BulkString::decode(&mut buf)?;
+        assert_eq!(frame, BulkString::new(b"hello"));
+
+        buf.extend_from_slice(b"$5\r\nhello");
+        let ret = BulkString::decode(&mut buf);
+        assert_eq!(ret.unwrap_err(), RespError::NotComplete);
+
+        buf.extend_from_slice(b"\r\n");
+        let frame = BulkString::decode(&mut buf)?;
+        assert_eq!(frame, BulkString::new(b"hello"));
 
         Ok(())
     }
