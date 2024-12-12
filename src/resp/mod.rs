@@ -38,8 +38,8 @@ pub enum RespError {
     ParseIntError(#[from] std::num::ParseIntError),
     // #[error("Utf8 error: {0}")]
     // Utf8Error(#[from] std::string::FromUtf8Error),
-    // #[error("Parse float error: {0}")]
-    // ParseFloatError(#[from] std::num::ParseFloatError),
+    #[error("Parse float error: {0}")]
+    ParseFloatError(#[from] std::num::ParseFloatError),
 }
 
 // utility functions
@@ -63,6 +63,7 @@ fn extract_fixed_data(
     Ok(())
 }
 
+// check and find nth CRLF index in the buffer
 fn extract_simple_frame_data(buf: &[u8], prefix: &str) -> Result<usize, RespError> {
     if buf.len() < 3 {
         return Err(RespError::NotComplete);
@@ -78,7 +79,7 @@ fn extract_simple_frame_data(buf: &[u8], prefix: &str) -> Result<usize, RespErro
     find_crlf(buf, 1).ok_or(RespError::NotComplete)
 }
 
-// find nth CRLF in the buffer
+// find nth CRLF index in the buffer
 fn find_crlf(buf: &[u8], nth: usize) -> Option<usize> {
     let mut count = 0;
     for i in 1..buf.len() - 1 {
@@ -97,6 +98,21 @@ fn parse_length(buf: &[u8], prefix: &str) -> Result<(usize, usize), RespError> {
     let end = extract_simple_frame_data(buf, prefix)?;
     let s = String::from_utf8_lossy(&buf[prefix.len()..end]);
     Ok((end, s.parse()?))
+}
+
+#[allow(unused)]
+fn calc_total_length(buf: &[u8], end: usize, len: usize, prefix: &str) -> Result<usize, RespError> {
+    match prefix {
+        // array
+        "*" => {}
+        // map
+        "%" => {}
+        // set
+        "~" => {}
+        // others
+        _ => {}
+    }
+    unimplemented!()
 }
 
 #[derive(Debug, PartialEq)]
@@ -168,6 +184,18 @@ impl Deref for BulkString {
     }
 }
 
+impl From<&[u8]> for BulkString {
+    fn from(s: &[u8]) -> Self {
+        BulkString(s.to_vec())
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for BulkString {
+    fn from(s: &[u8; N]) -> Self {
+        BulkString(s.to_vec())
+    }
+}
+
 impl Deref for RespArray {
     type Target = Vec<RespFrame>;
 
@@ -225,6 +253,12 @@ impl BulkString {
 impl RespArray {
     pub fn new(s: impl Into<Vec<RespFrame>>) -> Self {
         RespArray(s.into())
+    }
+}
+
+impl From<Vec<RespFrame>> for RespArray {
+    fn from(s: Vec<RespFrame>) -> Self {
+        RespArray(s)
     }
 }
 
