@@ -54,6 +54,7 @@ impl RespDecode for RespFrame {
     }
 }
 
+// - simple string: "+OK\r\n"
 impl RespDecode for SimpleString {
     const PREFIX: &'static str = "+";
     fn decode(buf: &mut BytesMut) -> Result<Self, RespError> {
@@ -64,6 +65,7 @@ impl RespDecode for SimpleString {
     }
 }
 
+// - error: "-Error message\r\n"
 impl RespDecode for SimpleError {
     const PREFIX: &'static str = "-";
     fn decode(buf: &mut BytesMut) -> Result<Self, RespError> {

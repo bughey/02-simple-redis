@@ -103,12 +103,10 @@ fn parse_length(buf: &[u8], prefix: &str) -> Result<(usize, usize), RespError> {
 #[allow(unused)]
 fn calc_total_length(buf: &[u8], end: usize, len: usize, prefix: &str) -> Result<usize, RespError> {
     match prefix {
-        // array
-        "*" => {}
+        // array | set
+        "*" | "~" => {}
         // map
         "%" => {}
-        // set
-        "~" => {}
         // others
         _ => {}
     }
